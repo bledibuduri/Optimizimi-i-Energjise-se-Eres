@@ -134,26 +134,49 @@ plt.show()
 
 #Vizualizimi i varshmërisë mes energjisë së prodhuar dhe të ruajtur, të ndara në subgrafikë
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
+# Krijimi i subgrafikëve për të ndarë Kosovën dhe Maqedoninë
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
 
-# Grafiku i energjisë së prodhuar nga era në Kosovë dhe Maqedoni
-ax1.plot(kosovo_data['time'], kosovo_data['XK'], label='Energjia e Prodhur nga Era (Kosovë)', color='tab:blue', linewidth=2)
-ax1.plot(macedonia_data['time'], macedonia_data['MK'], label='Energjia e Prodhur nga Era (Maqedoni)', color='tab:orange', linewidth=2)
-ax1.set_title("Energji e Prodhur nga Era në Kosovë dhe Maqedoni", fontsize=14)
-ax1.set_xlabel("Koha", fontsize=12)
+# Grafiku për energjinë e prodhuar nga era në Kosovë
+ax1.plot(kosovo_data['time'], kosovo_data['XK'], label='Kosovë', color='tab:blue', linewidth=2)
+ax1.set_title("Energjia e Prodhur nga Era në Kosovë (2014-2022)", fontsize=14)
 ax1.set_ylabel("Energjia e Prodhur (MWh)", fontsize=12)
-ax1.legend(loc='upper left', fontsize=10)
-ax1.grid(True, which='both', linestyle='--', linewidth=0.7)
+ax1.legend(loc='upper right', fontsize=10)
+ax1.grid(True, which='both', linestyle='--', linewidth=0.5)
 
-# Grafiku i energjisë së ruajtur nga Kosova dhe Maqedonia
-ax2.plot(rezultatet['Koha'], rezultatet['Ruajtja KM'], label='Ruajtja KM (Kosovë -> Maqedoni)', color='tab:green', linestyle='-', linewidth=2)
-ax2.plot(rezultatet['Koha'], rezultatet['Ruajtja MK'], label='Ruajtja MK (Maqedoni -> Kosovë)', color='tab:red', linestyle='--', linewidth=2)
-ax2.set_title("Energji e Ruajtur nga Kosova dhe Maqedonia", fontsize=14)
+# Grafiku për energjinë e prodhuar nga era në Maqedoni
+ax2.plot(macedonia_data['time'], macedonia_data['MK'], label='Maqedoni', color='tab:orange', linewidth=2)
+ax2.set_title("Energjia e Prodhur nga Era në Maqedoni (2014-2022)", fontsize=14)
+ax2.set_xlabel("Koha", fontsize=12)
+ax2.set_ylabel("Energjia e Prodhur (MWh)", fontsize=12)
+ax2.legend(loc='upper right', fontsize=10)
+ax2.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+plt.tight_layout()  # Siguron që grafiku të mos mbivendoset
+plt.show()
+
+
+# Krijimi i subgrafikëve për të ndarë Kosovën dhe Maqedoninë
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+
+# Grafiku për energjinë e ruajtur nga Kosova
+ax1.plot(rezultatet['Koha'], rezultatet['Ruajtja KM'], 
+         label='Ruajtja KM (Kosovë -> Maqedoni)', color='tab:green', linestyle='-', linewidth=2)
+ax1.set_title("Energjia e Ruajtur nga Kosova në Maqedoni", fontsize=14)
+ax1.set_ylabel("Energjia e Ruajtur (MWh)", fontsize=12)
+ax1.legend(loc='upper right', fontsize=10)
+ax1.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+# Grafiku për energjinë e ruajtur nga Maqedonia
+ax2.plot(rezultatet['Koha'], rezultatet['Ruajtja MK'], 
+         label='Ruajtja MK (Maqedoni -> Kosovë)', color='tab:red', linestyle='--', linewidth=2)
+ax2.set_title("Energjia e Ruajtur nga Maqedonia në Kosovë", fontsize=14)
 ax2.set_xlabel("Koha", fontsize=12)
 ax2.set_ylabel("Energjia e Ruajtur (MWh)", fontsize=12)
-ax2.legend(loc='upper left', fontsize=10)
-ax2.grid(True, which='both', linestyle='--', linewidth=0.7)
+ax2.legend(loc='upper right', fontsize=10)
+ax2.grid(True, which='both', linestyle='--', linewidth=0.5)
 
 plt.tight_layout()  # Siguron që subgrafikët të mos mbivendosen
 plt.show()
+
 
