@@ -180,3 +180,24 @@ plt.tight_layout()  # Siguron që subgrafikët të mos mbivendosen
 plt.show()
 
 
+# Shtojmë kolonat e muajit dhe vitit për analizë
+rezultatet['Viti'] = pd.to_datetime(rezultatet['Koha']).dt.year
+rezultatet['Muaji'] = pd.to_datetime(rezultatet['Koha']).dt.month
+
+# Krijojmë një pivot tabelë për heatmap
+pivot_km = rezultatet.pivot_table(index='Muaji', columns='Viti', values='Ruajtja KM', aggfunc='sum')
+pivot_mk = rezultatet.pivot_table(index='Muaji', columns='Viti', values='Ruajtja MK', aggfunc='sum')
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+
+sns.heatmap(pivot_km, cmap="Greens", annot=True, fmt=".0f", linewidths=0.5, ax=ax1)
+ax1.set_title("Ruajtja e Energjisë nga Kosova (Heatmap)", fontsize=14)
+
+sns.heatmap(pivot_mk, cmap="Reds", annot=True, fmt=".0f", linewidths=0.5, ax=ax2)
+ax2.set_title("Ruajtja e Energjisë nga Maqedonia (Heatmap)", fontsize=14)
+
+plt.tight_layout()
+plt.show()
+
+
+
