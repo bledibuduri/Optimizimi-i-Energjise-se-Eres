@@ -3,201 +3,144 @@ import pulp
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# === 1. Leximi i të dhënave ===
-# Lexojmë datasetin për Kosovën
+# === 1. Reading Data ===
+# Read the dataset for Kosovo
 kosovo_data = pd.read_csv("kosovo_wind.csv")
-# Lexojmë datasetin për Maqedoninë e Veriut
+# Read the dataset for North Macedonia
 macedonia_data = pd.read_csv("macedonia_wind.csv")
 
-# Konvertojmë kolonën 'time' në formatin datetime
+# Convert the 'time' column to datetime format
 kosovo_data['time'] = pd.to_datetime(kosovo_data['time'])
 macedonia_data['time'] = pd.to_datetime(macedonia_data['time'])
 
-# Filtrojmë të dhënat për periudhën 2014-2022
+# Filter data for the period 2014-2022
 kosovo_data = kosovo_data[(kosovo_data['time'].dt.year >= 2014) & (kosovo_data['time'].dt.year <= 2022)]
 macedonia_data = macedonia_data[(macedonia_data['time'].dt.year >= 2014) & (macedonia_data['time'].dt.year <= 2022)]
 
-# === 2. Krijimi i modelit të optimizimit ===
-problemi = pulp.LpProblem("Optimizimi_Energjise_Eres", pulp.LpMaximize)
+# === 2. Creating the Optimization Model ===
+problem = pulp.LpProblem("Wind_Energy_Optimization", pulp.LpMaximize)
 
-# Lista e kohës (bazuar në dataset)
-koha = kosovo_data['time'].tolist()
+# Time list (based on dataset)
+time_list = kosovo_data['time'].tolist()
 
-# Krijimi i variablave të vendimmarrjes
-ruajtja_km = pulp.LpVariable.dicts("Ruajtja_KM", koha, lowBound=0, cat="Continuous")  # Energjia e ruajtur nga Kosova në Maqedoni
-ruajtja_mk = pulp.LpVariable.dicts("Ruajtja_MK", koha, lowBound=0, cat="Continuous")  # Energjia e ruajtur nga Maqedonia në Kosovë
+# Creating decision variables
+storage_km = pulp.LpVariable.dicts("Storage_KM", time_list, lowBound=0, cat="Continuous")  # Energy stored from Kosovo to Macedonia
+storage_mk = pulp.LpVariable.dicts("Storage_MK", time_list, lowBound=0, cat="Continuous")  # Energy stored from Macedonia to Kosovo
 
-# Krijimi i variablës binare për kufizimin
-z = pulp.LpVariable.dicts("z", koha, cat="Binary")
-M = 1000  # Një numër i madh për të vendosur kufizimet e sakta
+# Creating binary variable for constraint enforcement
+z = pulp.LpVariable.dicts("z", time_list, cat="Binary")
+M = 1000  # Large number for accurate constraints
 
-# === 3. Krijimi i funksionit objektiv ===
-# Maksimizimi i përdorimit të erës
-problemi += pulp.lpSum(ruajtja_km[t] + ruajtja_mk[t] for t in koha)
+# === 3. Objective Function ===
+# Maximizing wind energy utilization
+problem += pulp.lpSum(storage_km[t] + storage_mk[t] for t in time_list)
 
-# === 4. Kufizimet ===
-for t in koha:
-    # Kufizimi që energjia e ruajtur në një drejtim të jetë 0 nëse ruajtja në drejtim tjetër është e aktivizuar
-    problemi += ruajtja_km[t] <= z[t] * M  # Nëse z[t] = 0, ruajtja_km është 0
-    problemi += ruajtja_mk[t] <= (1 - z[t]) * M  # Nëse z[t] = 1, ruajtja_mk është 0
+# === 4. Constraints ===
+for t in time_list:
+    # Constraint: Stored energy in one direction should be 0 if the other direction is active
+    problem += storage_km[t] <= z[t] * M  # If z[t] = 0, storage_km is 0
+    problem += storage_mk[t] <= (1 - z[t]) * M  # If z[t] = 1, storage_mk is 0
     
-    # Kufizimi që nuk mund të ruhet më shumë energji sesa prodhohet
-    problemi += ruajtja_km[t] <= kosovo_data.loc[kosovo_data['time'] == t, 'XK'].values[0]
-    problemi += ruajtja_mk[t] <= macedonia_data.loc[macedonia_data['time'] == t, 'MK'].values[0]
+    # Constraint: Cannot store more energy than produced
+    problem += storage_km[t] <= kosovo_data.loc[kosovo_data['time'] == t, 'XK'].values[0]
+    problem += storage_mk[t] <= macedonia_data.loc[macedonia_data['time'] == t, 'MK'].values[0]
 
-# === 5. Zgjidhja e problemit ===
-problemi.solve()
+# === 5. Solving the Problem ===
+problem.solve()
 
-# === 6. Shfaqja e rezultateve ===
-print("Statusi i zgjidhjes:", pulp.LpStatus[problemi.status])
+# === 6. Displaying Results ===
+print("Solution Status:", pulp.LpStatus[problem.status])
 
-# Ruajmë rezultatet në një DataFrame
-rezultatet = pd.DataFrame({
-    "Koha": koha,
-    "Ruajtja KM": [ruajtja_km[t].varValue for t in koha],
-    "Ruajtja MK": [ruajtja_mk[t].varValue for t in koha]
+# Save results to a DataFrame
+results = pd.DataFrame({
+    "Time": time_list,
+    "Storage KM": [storage_km[t].varValue for t in time_list],
+    "Storage MK": [storage_mk[t].varValue for t in time_list]
 })
 
-# Ruajmë rezultatet në një skedar CSV
-rezultatet.to_csv("rezultatet_optimizimi.csv", index=False)
+# Save results to a CSV file
+results.to_csv("optimization_results.csv", index=False)
 
-print("Rezultatet u ruajtën me sukses në 'rezultatet_optimizimi.csv'")
+print("Results successfully saved in 'optimization_results.csv'")
 
-# === Vizualizimi i rezultateve ===
+# === Visualization of Results ===
 
-# 1. Vizualizimi i energjisë së ruajtur në Kosovë dhe Maqedoni në subgrafikë të ndarë
+# 1. Visualization of stored energy from Kosovo and Macedonia in separate subplots
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
 
-# Grafiku për energjinë e ruajtur nga Kosova
-ax1.plot(rezultatet['Koha'], rezultatet['Ruajtja KM'], label='Ruajtja KM (Kosovë -> Maqedoni)', color='blue')
-ax1.set_title("Energjia e Ruajtur nga Kosova në Maqedoni (2014-2022)")
-ax1.set_xlabel("Koha")
-ax1.set_ylabel("Energjia e Ruajtur (MWh)")
+ax1.plot(results['Time'], results['Storage KM'], label='Storage KM (Kosovo -> Macedonia)', color='blue')
+ax1.set_title("Stored Energy from Kosovo to Macedonia (2014-2022)")
+ax1.set_xlabel("Time")
+ax1.set_ylabel("Stored Energy (MWh)")
 ax1.legend()
 ax1.grid(True)
 
-# Grafiku për energjinë e ruajtur nga Maqedonia
-ax2.plot(rezultatet['Koha'], rezultatet['Ruajtja MK'], label='Ruajtja MK (Maqedoni -> Kosovë)', color='green')
-ax2.set_title("Energjia e Ruajtur nga Maqedonia në Kosovë (2014-2022)")
-ax2.set_xlabel("Koha")
-ax2.set_ylabel("Energjia e Ruajtur (MWh)")
+ax2.plot(results['Time'], results['Storage MK'], label='Storage MK (Macedonia -> Kosovo)', color='green')
+ax2.set_title("Stored Energy from Macedonia to Kosovo (2014-2022)")
+ax2.set_xlabel("Time")
+ax2.set_ylabel("Stored Energy (MWh)")
 ax2.legend()
 ax2.grid(True)
 
-plt.tight_layout()  # Siguron që subgrafikët të mos mbivendosen
+plt.tight_layout()
 plt.show()
 
-
-# 2. Grafiku për krahasimin e energjisë së prodhuar nga era në Kosovë dhe Maqedoni në subgrafikë të ndarë
+# 2. Visualization of wind energy production in Kosovo and Macedonia
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
 
-# Grafiku për energjinë e prodhuar nga era në Kosovë
-ax1.plot(kosovo_data['time'], kosovo_data['XK'], label='Energjia e Prodhur nga Era (Kosovë)', color='blue')
-ax1.set_title("Energjia e Prodhur nga Era në Kosovë (2014-2022)")
-ax1.set_xlabel("Koha")
-ax1.set_ylabel("Energjia e Prodhur (MWh)")
+ax1.plot(kosovo_data['time'], kosovo_data['XK'], label='Wind Energy Production (Kosovo)', color='blue')
+ax1.set_title("Wind Energy Production in Kosovo (2014-2022)")
+ax1.set_xlabel("Time")
+ax1.set_ylabel("Produced Energy (MWh)")
 ax1.legend()
 ax1.grid(True)
 
-# Grafiku për energjinë e prodhuar nga era në Maqedoni
-ax2.plot(macedonia_data['time'], macedonia_data['MK'], label='Energjia e Prodhur nga Era (Maqedoni)', color='green')
-ax2.set_title("Energjia e Prodhur nga Era në Maqedoni (2014-2022)")
-ax2.set_xlabel("Koha")
-ax2.set_ylabel("Energjia e Prodhur (MWh)")
+ax2.plot(macedonia_data['time'], macedonia_data['MK'], label='Wind Energy Production (Macedonia)', color='green')
+ax2.set_title("Wind Energy Production in Macedonia (2014-2022)")
+ax2.set_xlabel("Time")
+ax2.set_ylabel("Produced Energy (MWh)")
 ax2.legend()
 ax2.grid(True)
 
-plt.tight_layout()  # Siguron që subgrafikët të mos mbivendosen
+plt.tight_layout()
 plt.show()
 
-
-# 3. Shpërndarja e energjisë së ruajtur për secilin drejtim
+# 3. Distribution of stored energy for each direction
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
 
-# Shpërndarja për energjinë e ruajtur nga Kosova
-sns.histplot(rezultatet['Ruajtja KM'], kde=True, color='blue', label='Ruajtja KM', bins=30, ax=ax1)
-ax1.set_title("Shpërndarja e Energjisë së Ruajtur nga Kosova në Maqedoni")
-ax1.set_xlabel("Energjia e Ruajtur (MWh)")
-ax1.set_ylabel("Frekuenca")
+sns.histplot(results['Storage KM'], kde=True, color='blue', label='Storage KM', bins=30, ax=ax1)
+ax1.set_title("Distribution of Stored Energy from Kosovo to Macedonia")
+ax1.set_xlabel("Stored Energy (MWh)")
+ax1.set_ylabel("Frequency")
 ax1.legend()
 
-# Shpërndarja për energjinë e ruajtur nga Maqedonia
-sns.histplot(rezultatet['Ruajtja MK'], kde=True, color='green', label='Ruajtja MK', bins=30, ax=ax2)
-ax2.set_title("Shpërndarja e Energjisë së Ruajtur nga Maqedonia në Kosovë")
-ax2.set_xlabel("Energjia e Ruajtur (MWh)")
-ax2.set_ylabel("Frekuenca")
+sns.histplot(results['Storage MK'], kde=True, color='green', label='Storage MK', bins=30, ax=ax2)
+ax2.set_title("Distribution of Stored Energy from Macedonia to Kosovo")
+ax2.set_xlabel("Stored Energy (MWh)")
+ax2.set_ylabel("Frequency")
 ax2.legend()
 
-plt.tight_layout()  # Siguron që subgrafikët të mos mbivendosen
+plt.tight_layout()
 plt.show()
 
+# Heatmap of stored energy by month and year
+results['Year'] = pd.to_datetime(results['Time']).dt.year
+results['Month'] = pd.to_datetime(results['Time']).dt.month
 
-#Vizualizimi i varshmërisë mes energjisë së prodhuar dhe të ruajtur, të ndara në subgrafikë
-
-# Krijimi i subgrafikëve për të ndarë Kosovën dhe Maqedoninë
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
-
-# Grafiku për energjinë e prodhuar nga era në Kosovë
-ax1.plot(kosovo_data['time'], kosovo_data['XK'], label='Kosovë', color='tab:blue', linewidth=2)
-ax1.set_title("Energjia e Prodhur nga Era në Kosovë (2014-2022)", fontsize=14)
-ax1.set_ylabel("Energjia e Prodhur (MWh)", fontsize=12)
-ax1.legend(loc='upper right', fontsize=10)
-ax1.grid(True, which='both', linestyle='--', linewidth=0.5)
-
-# Grafiku për energjinë e prodhuar nga era në Maqedoni
-ax2.plot(macedonia_data['time'], macedonia_data['MK'], label='Maqedoni', color='tab:orange', linewidth=2)
-ax2.set_title("Energjia e Prodhur nga Era në Maqedoni (2014-2022)", fontsize=14)
-ax2.set_xlabel("Koha", fontsize=12)
-ax2.set_ylabel("Energjia e Prodhur (MWh)", fontsize=12)
-ax2.legend(loc='upper right', fontsize=10)
-ax2.grid(True, which='both', linestyle='--', linewidth=0.5)
-
-plt.tight_layout()  # Siguron që grafiku të mos mbivendoset
-plt.show()
-
-
-# Krijimi i subgrafikëve për të ndarë Kosovën dhe Maqedoninë
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
-
-# Grafiku për energjinë e ruajtur nga Kosova
-ax1.plot(rezultatet['Koha'], rezultatet['Ruajtja KM'], 
-         label='Ruajtja KM (Kosovë -> Maqedoni)', color='tab:green', linestyle='-', linewidth=2)
-ax1.set_title("Energjia e Ruajtur nga Kosova në Maqedoni", fontsize=14)
-ax1.set_ylabel("Energjia e Ruajtur (MWh)", fontsize=12)
-ax1.legend(loc='upper right', fontsize=10)
-ax1.grid(True, which='both', linestyle='--', linewidth=0.5)
-
-# Grafiku për energjinë e ruajtur nga Maqedonia
-ax2.plot(rezultatet['Koha'], rezultatet['Ruajtja MK'], 
-         label='Ruajtja MK (Maqedoni -> Kosovë)', color='tab:red', linestyle='--', linewidth=2)
-ax2.set_title("Energjia e Ruajtur nga Maqedonia në Kosovë", fontsize=14)
-ax2.set_xlabel("Koha", fontsize=12)
-ax2.set_ylabel("Energjia e Ruajtur (MWh)", fontsize=12)
-ax2.legend(loc='upper right', fontsize=10)
-ax2.grid(True, which='both', linestyle='--', linewidth=0.5)
-
-plt.tight_layout()  # Siguron që subgrafikët të mos mbivendosen
-plt.show()
-
-
-# Shtojmë kolonat e muajit dhe vitit për analizë
-rezultatet['Viti'] = pd.to_datetime(rezultatet['Koha']).dt.year
-rezultatet['Muaji'] = pd.to_datetime(rezultatet['Koha']).dt.month
-
-# Krijojmë një pivot tabelë për heatmap
-pivot_km = rezultatet.pivot_table(index='Muaji', columns='Viti', values='Ruajtja KM', aggfunc='sum')
-pivot_mk = rezultatet.pivot_table(index='Muaji', columns='Viti', values='Ruajtja MK', aggfunc='sum')
+pivot_km = results.pivot_table(index='Month', columns='Year', values='Storage KM', aggfunc='sum')
+pivot_mk = results.pivot_table(index='Month', columns='Year', values='Storage MK', aggfunc='sum')
 
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
 
 sns.heatmap(pivot_km, cmap="Greens", annot=True, fmt=".0f", linewidths=0.5, ax=ax1)
-ax1.set_title("Ruajtja e Energjisë nga Kosova (Heatmap)", fontsize=14)
+ax1.set_title("Stored Energy from Kosovo (Heatmap)", fontsize=14)
 
 sns.heatmap(pivot_mk, cmap="Reds", annot=True, fmt=".0f", linewidths=0.5, ax=ax2)
-ax2.set_title("Ruajtja e Energjisë nga Maqedonia (Heatmap)", fontsize=14)
+ax2.set_title("Stored Energy from Macedonia (Heatmap)", fontsize=14)
 
 plt.tight_layout()
 plt.show()
+
 
 
 
